@@ -1,110 +1,138 @@
 package main
 
-// These imports will be used later on the tutorial. If you save the file
-// now, Go might complain they are unused, but that's fine.
-// You may also need to run `go mod tidy` to download bubbletea and its
-// dependencies.
 import (
 	"fmt"
-	"os"
+	"math/rand"
+	"strings"
+	"time"
+
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type model struct {
-	choices  []string         // items on the to-do list
-	cursor   int              // which to-do list item our cursor is pointing at
-	selected map[int]struct{} // which to-do items are selected
+	prompt        string
+	userInput     string
+	onScreenKeys  []string
+	highlightedKey string
+	spinner       spinner.Model
+	err           error
+	score         int
+	started       bool
+	finished      bool
 }
 
-func main() {
-	p := tea.NewProgram(model{
-		// Our to-do list is a grocery list
-		choices: []string{"Buy carrots", "Buy celery", "Buy kohlrabi"},
-
-		// A map which indicates which choices are selected. We're using
-		// the  map like a mathematical set. The keys refer to the indexes
-		// of the `choices` slice, above.
-		selected: make(map[int]struct{}),
-	})
-	if _, err := p.Run(); err != nil {
-		fmt.Printf("Alas, there's been an error: %v", err)
-		os.Exit(1)
+func initialModel() model {
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+	return model{
+		onScreenKeys: []string{"Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "A", "S", "D", "F", "G", "H", "J", "K", "L", "Z", "X", "C", "V", "B", "N", "M"},
+		spinner:      s,
 	}
 }
 
 func (m model) Init() tea.Cmd {
-	// Just return `nil`, which means "no I/O right now, please."
-	return nil
+	return m.spinner.Tick
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
 	switch msg := msg.(type) {
-
-	// Is it a key press?
 	case tea.KeyMsg:
-
-		// Cool, what was the actual key pressed?
 		switch msg.String() {
-
-		// These keys should exit the program.
-		case "ctrl+c", "q":
+		case "ctrl+c": //, "q":
 			return m, tea.Quit
-
-		// The "up" and "k" keys move the cursor up
-		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
-			}
-
-		// The "down" and "j" keys move the cursor down
-		case "down", "j":
-			if m.cursor < len(m.choices)-1 {
-				m.cursor++
-			}
-
-		// The "enter" key and the spacebar (a literal space) toggle
-		// the selected state for the item that the cursor is pointing at.
-		case "enter", " ":
-			_, ok := m.selected[m.cursor]
-			if ok {
-				delete(m.selected, m.cursor)
+		case "enter":
+			if !m.started {
+				m.started = true
+				m.prompt = m.generatePrompt()
+			} else if !m.finished {
+				if m.userInput == m.prompt {
+					m.score++
+					m.err = nil
+					m.prompt = m.generatePrompt()
+					m.userInput = ""
+				} else {
+					m.err = fmt.Errorf("Incorrect. Try again.")
+					m.userInput = ""
+				}
 			} else {
-				m.selected[m.cursor] = struct{}{}
+				return m, tea.Quit
+			}
+		default:
+			if len(m.userInput) < len(m.prompt) {
+				m.userInput += msg.String()
+				m.highlightedKey = msg.String()
 			}
 		}
+
+	case spinner.TickMsg:
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
 	}
 
-	// Return the updated model to the Bubble Tea runtime for processing.
-	// Note that we're not returning a command.
 	return m, nil
 }
 
 func (m model) View() string {
-	// The header
-	s := "What should we buy at the market?\n\n"
+	var b strings.Builder
 
-	// Iterate over our choices
-	for i, choice := range m.choices {
+	b.WriteString("\n   Typr2 - Let's Go\n\n")
 
-		// Is the cursor pointing at this choice?
-		cursor := " " // no cursor
-		if m.cursor == i {
-			cursor = ">" // cursor!
+	if !m.started {
+		b.WriteString("   Press Enter to start.\n\n")
+	} else {
+		b.WriteString(fmt.Sprintf("   Prompt: %s\n\n   ", m.prompt))
+
+		for i, key := range m.onScreenKeys {
+			if key == m.highlightedKey {
+				b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Render(key))
+			} else {
+				b.WriteString(key)
+			}
+			if (i+1)%10 == 0 {
+				b.WriteString("\n   ")
+			} else {
+				b.WriteString(" ")
+			}
 		}
 
-		// Is this choice selected?
-		checked := " " // not selected
-		if _, ok := m.selected[i]; ok {
-			checked = "x" // selected!
+		b.WriteString("\n\n")
+		b.WriteString(fmt.Sprintf("   Your input: %s\n\n", m.userInput))
+
+		if m.err != nil {
+			b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Render(m.err.Error()))
+			b.WriteString("\n\n")
 		}
 
-		// Render the row
-		s += fmt.Sprintf("%s [%s] %s\n", cursor, checked, choice)
+		b.WriteString(fmt.Sprintf("   Score: %d\n\n", m.score))
 	}
 
-	// The footer
-	s += "\nPress q to quit.\n"
+	b.WriteString(m.spinner.View())
+	b.WriteString("\n\n")
 
-	// Send the UI for rendering
-	return s
+	return b.String()
 }
+
+func (m *model) generatePrompt() string {
+	// Generate a random prompt for the user to type
+	rand.Seed(time.Now().UnixNano())
+	words := []string{
+		"The five boxing wizards jump quickly.",
+		"Pack my box with five dozen liquor jugs.",
+		"When zombies arrive, quickly fax Judge Pat.",
+		"Amazingly few discotheques provide jukeboxes.",
+		"The quick onyx goblin jumps over the lazy dwarf.",
+	}
+	return words[rand.Intn(len(words))]
+}
+
+func main() {
+	p := tea.NewProgram(initialModel())
+	if err := p.Start(); err != nil {
+		fmt.Printf("Error: %v", err)
+	}
+}
+
