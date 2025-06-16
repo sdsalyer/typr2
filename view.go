@@ -380,40 +380,30 @@ func (m Model) renderKeyboard(maxHeight int) string {
 
 			// info += fmt.Sprintf("\nRow %d: ", y)
 			for _, key := range rowKeys {
-				// Determine key label
-				label := ""
-				if len(key.Labels) >= 5 {
-					label = key.Labels[4]
-				} else {
-					label = key.Labels[len(key.Labels)-1]
-				}
+				// // Determine key label
+				// label := ""
+				// if len(key.Labels) >= 5 {
+				// 	label = key.Labels[4]
+				// } else {
+				// 	label = key.Labels[0]
+				// }
+				
+				// Keys have up to 12 labels, in 3 columns and 3 rows, plus a "front face" row
+				label1 := lipgloss.JoinHorizontal(lipgloss.Left, key.Labels[:3]...)
+				label2 := lipgloss.JoinHorizontal(lipgloss.Left, key.Labels[3:6]...)
+				label3 := lipgloss.JoinHorizontal(lipgloss.Left, key.Labels[6:9]...)
+				label4 := lipgloss.JoinHorizontal(lipgloss.Left, key.Labels[9:]...)
 
-				//if strings.HasSuffix(label, "J") {
-				if label == "J" {
-					s, err := PrettyPrint(key)
-					if err == nil {
-						info += fmt.Sprintf("%v\n", s)
-					}
-				}
-
-				// Handle special keys
-				if label == "" {
-					label = "□"
-				}
-
-				// Truncate long labels
-				if len(label) > 8 {
-					label = label[:6] + ".."
-				}
+				label := lipgloss.JoinVertical(lipgloss.Left, label1, label2, label3, label4)
 
 				// Determine key width
 				// width := max(3, int(key.Width)) //min(max(int(key.Width*4), 3), 12)
 				width := min(max(int(key.Width*4), 3), 12)
 
 				// Check if key is pressed
-				// TODO: why is this handling a specific case from the json config which likely won't exist?
-				keyPressed := m.pressedKeys[strings.ToUpper(label)] ||
-					(label == "spaaaaaaaaaaaaaaaaaaaaaaaaaace" && m.pressedKeys["SPACE"])
+				// TODO: this now needs to check what the actual key is vs. what the label(s) might contain...
+				keyPressed := m.pressedKeys[strings.ToUpper(label)]
+				// || (label == "spaaaaaaaaaaaaaaaaaaaaaaaaaace" && m.pressedKeys["SPACE"])
 
 				// Choose style
 				var style lipgloss.Style
@@ -462,7 +452,7 @@ func (m Model) renderKeyboard(maxHeight int) string {
 
 	// Join all rows
 	// keyboard := strings.Join(keyboardLines, "\n")
-	// keyboard := lipgloss.JoinVertical(lipgloss.Left, keyboardLines...)
+	keyboard := lipgloss.JoinVertical(lipgloss.Left, keyboardLines...)
 
 	// Add keyboard info
 	// TODO: these fields could be empty
@@ -478,17 +468,17 @@ func (m Model) renderKeyboard(maxHeight int) string {
 
 	// Apply height constraint to the final rendered output
 	//finalContent := info + "\n\n" + keyboard
-	// styledKeyboard := lipgloss.NewStyle().
-	// 	Border(lipgloss.RoundedBorder()).
-	// 	BorderForeground(lipgloss.Color("62")).
-	// 	Padding(1).
-	// 	Margin(1).
-	// 	//Height(maxHeight).
-	// 	Render(keyboard)
-	// 	//Render(finalContent)
+	styledKeyboard := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("62")).
+		Padding(1).
+		Margin(1).
+		//Height(maxHeight).
+		Render(keyboard)
+		//Render(finalContent)
 
 	// return styledKeyboard
-	ui := lipgloss.JoinVertical(lipgloss.Left, info) //, styledKeyboard)
+	ui := lipgloss.JoinVertical(lipgloss.Left, info, styledKeyboard)
 	return ui //m.centerContent(ui)
 }
 

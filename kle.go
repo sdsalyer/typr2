@@ -66,7 +66,7 @@ type Key struct {
 	Decal   bool `json:"decal"`
 	Ghost   bool `json:"ghost"`
 	Stepped bool `json:"stepped"`
-	Nub     bool `json:"nub"`
+	Nub     bool `json:"nub"`	// Bump for "homing" (i.e. F and J on QWERTY home row)
 
 	Profile string `json:"profile"`
 
@@ -75,8 +75,9 @@ type Key struct {
 	ST string `json:"st"` // switch type
 
 	// Additional fields for rendering
-	TextColor string `json:"textColor"`
+	Alignment int    `json:"alignment"`
 	FontSize  int    `json:"fontSize"`
+	TextColor string `json:"textColor"`
 }
 
 // parseKLELayout parses the KLE JSON format into our Keyboard struct
@@ -160,9 +161,6 @@ func parseKeyRow(row []any, startX, y float64) []Key {
 		case string:
 			// Key label - create key
 			key := Key{
-				// Labels: []string{v},
-				Labels: parseLabels(v),
-				// Labels: reorderLabels(strings.Split(v, "\n"), alignment),
 				X:      currentX,
 				Y:      y,
 				Width:  1.0,
@@ -173,6 +171,8 @@ func parseKeyRow(row []any, startX, y float64) []Key {
 			if currentProps != nil {
 				applyKeyProps(&key, currentProps)
 			}
+
+			key.Labels = parseLabels(v, key.Alignment)
 
 			keys = append(keys, key)
 			currentX += key.Width
@@ -196,21 +196,47 @@ func applyKeyProps(key *Key, props map[string]any) {
 	if w, ok := props["w"].(float64); ok {
 		key.Width = w
 	}
+
 	if h, ok := props["h"].(float64); ok {
 		key.Height = h
 	}
+
 	if c, ok := props["c"].(string); ok {
 		key.Color = c
 	}
+
 	if t, ok := props["t"].(string); ok {
 		key.TextColor = t
 	}
+
 	if f, ok := props["f"].(float64); ok {
 		key.FontSize = int(f)
 	}
-	// Add more property mappings as needed
+
+	if a, ok := props["a"].(float64); ok {
+		key.Alignment = int(a)
+	}
+
+	if p, ok := props["p"].(string); ok {
+		key.Profile = p
+	}
+
+	if d, ok := props["d"].(bool); ok {
+		key.Decal = d
+	}
+
+	if g, ok := props["g"].(bool); ok {
+		key.Ghost = g
+	}
+	
+	if n, ok := props["n"].(bool); ok {
+		key.Nub = n
+	}
+
+	// etc...
 }
 
+// Read and parse KLE layout JSON file
 func loadKeyboard(filename string) (Keyboard, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
@@ -220,18 +246,13 @@ func loadKeyboard(filename string) (Keyboard, error) {
 	return parseKLELayout(data)
 }
 
-/*
-  function reorderLabelsIn(labels, align) {
-    var ret: Array<any> = [];
-    for (var i = 0; i < labels.length; ++i) {
-      if (labels[i]) ret[labelMap[align][i]] = labels[i];
-    }
-    return ret;
-  }
-*/
-func reorderLabels(labels []string, align int) []string {
+// Reorder labels based on alignment flags
+// See: https://github.com/ijprest/kle-serial/blob/4080386fcdcb66a391e1b4857532512f9ca4121e/index.ts#L86-L92
+func reorderLabels(labels []string, alignment int) []string {
+	// Map from serialized label position to normalized position,
+	// depending on the alignment flags.
 	labelMap := [][]int{
-		// 0   1   2   3   4   5   6   7   8   9  10  11   // align flags
+		// 0   1   2   3   4   5   6   7   8   9  10  11   // alignment flags
 		{  0,  6,  2,  8,  9, 11,  3,  5,  1,  4,  7, 10}, // 0 = no centering
 		{  1,  7, -1, -1,  9, 11,  4, -1, -1, -1, -1, 10}, // 1 = center x
 		{  3, -1,  5, -1,  9, 11, -1, -1,  4, -1, -1, 10}, // 2 = center y
@@ -244,7 +265,7 @@ func reorderLabels(labels []string, align int) []string {
 
 	var retVal []string = make([]string, len(labels))
 	for i := range labels {
-		newIndex := labelMap[align][i]
+		newIndex := labelMap[alignment][i]
 		if newIndex == -1 {
 			continue // Don't reorder this index
 	 	}
@@ -254,10 +275,8 @@ func reorderLabels(labels []string, align int) []string {
 	return retVal
 }
 
-func parseLabels(labelStr string) []string {
+func parseLabels(labelStr string, alignment int) []string {
 	// Split labels by newline and trim whitespace
-	// Map from serialized label position to normalized position,
-	// depending on the alignment flags.
 	
 	labels := strings.Split(labelStr, "\n")
 	for i := range 12 {
@@ -272,8 +291,6 @@ func parseLabels(labelStr string) []string {
 		panic(fmt.Sprintf("Expected 12 labels, got %d: %v", len(labels), labels))
 	}
 
-	// TODO: Handle alignment flags
-	alignment := 4 // Default to center front alignment
 	return reorderLabels(labels, alignment)
 }
 
