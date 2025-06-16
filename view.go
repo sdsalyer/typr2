@@ -81,7 +81,7 @@ func (m Model) renderStartScreen() string {
 	)
 
 	menu := menuStyle.Render(menuContent)
-	status := helpStyle.Render(fmt.Sprintf("Terminal: %dx%d", m.width, m.height))
+	status := helpStyle.Render(fmt.Sprintf("Terminal: %dx%d", m.termWidth, m.termHeight))
 
 	ui := lipgloss.JoinVertical(lipgloss.Left, title, menu, status)
 	return m.centerContent(ui)
@@ -89,21 +89,74 @@ func (m Model) renderStartScreen() string {
 
 // Render main screen
 func (m Model) renderMainScreen() string {
+	// 	title := titleStyle.Render("📱 Main Application")
+	//
+	// 	content := contentStyle.Render(`This is the main application screen.
+	//
+	// Add your main application logic here.
+	//
+	// Features could include:
+	// • Data display
+	// • Interactive forms
+	// • Real-time updates
+	// • File operations`)
+	//
+	// 	help := helpStyle.Render("Press 'Esc' or 'b' to go back • 'q' or Ctrl+C to quit")
+	//
+	// 	ui := lipgloss.JoinVertical(lipgloss.Left, title, content, help)
+	// 	return m.centerContent(ui)
+
 	title := titleStyle.Render("📱 Main Application")
+	// Calculate dimensions
+	promptHeight := m.termHeight / 3
+	keyboardHeight := m.termHeight - promptHeight
 
-	content := contentStyle.Render(`This is the main application screen.
+	// Style definitions
+	promptStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("62")).
+		Padding(1, 2).
+		Margin(1)
 
-Add your main application logic here.
+	correctStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("46"))                                    // Green
+	incorrectStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("196"))                                 // Red
+	currentStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("226")).Background(lipgloss.Color("240")) // Yellow bg
+	futureStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))                                    // Gray
 
-Features could include:
-• Data display
-• Interactive forms  
-• Real-time updates
-• File operations`)
+	// Build prompt display
+	var promptDisplay strings.Builder
+	for i, char := range m.prompt {
+		if i < len(m.userInput) {
+			// Character has been typed
+			if i < len(m.userInput) && rune(m.userInput[i]) == char {
+				promptDisplay.WriteString(correctStyle.Render(string(char)))
+			} else {
+				promptDisplay.WriteString(incorrectStyle.Render(string(char)))
+			}
+		} else if i == m.currentChar {
+			// Current character to type
+			promptDisplay.WriteString(currentStyle.Render(string(char)))
+		} else {
+			// Future characters
+			promptDisplay.WriteString(futureStyle.Render(string(char)))
+		}
+	}
 
-	help := helpStyle.Render("Press 'Esc' or 'b' to go back • 'q' or Ctrl+C to quit")
+	// Progress info
+	progress := fmt.Sprintf("Progress: %d/%d characters | Prompt %d/%d",
+		len(m.userInput), len(m.prompt), m.promptIndex+1, len(m.prompts))
 
-	ui := lipgloss.JoinVertical(lipgloss.Left, title, content, help)
+	instructions := "Tab: Next prompt | Ctrl+C/Q: Quit"
+
+	promptSection := promptStyle.Render(
+		fmt.Sprintf("Type: %s\n\n%s\n\n%s\n%s",
+			m.prompt, promptDisplay.String(), progress, instructions))
+
+	// Build keyboard display
+	keyboardSection := m.renderKeyboard(keyboardHeight)
+
+	// return promptSection + "\n" + keyboardSection
+	ui := lipgloss.JoinVertical(lipgloss.Left, title, promptSection, keyboardSection)
 	return m.centerContent(ui)
 }
 
@@ -158,14 +211,14 @@ func (m Model) renderExtrasScreen() string {
 // Center content both horizontally and vertically
 func (m Model) centerContent(content string) string {
 	// Reserve space for status line (subtract 1 from height)
-	availableHeight := m.height - 1
+	availableHeight := m.termHeight - 1
 
 	// Calculate content dimensions
 	contentWidth := lipgloss.Width(content)
 	contentHeight := lipgloss.Height(content)
 
 	// Calculate padding needed for centering
-	horizontalPadding := (m.width - contentWidth) / 2
+	horizontalPadding := (m.termWidth - contentWidth) / 2
 	verticalPadding := (availableHeight - contentHeight) / 2
 
 	// Ensure padding is not negative
@@ -178,7 +231,7 @@ func (m Model) centerContent(content string) string {
 
 	// Apply centering (using available height minus status line)
 	centeredStyle := lipgloss.NewStyle().
-		Width(m.width).
+		Width(m.termWidth).
 		Height(availableHeight).
 		Align(lipgloss.Center, lipgloss.Center)
 
@@ -217,18 +270,15 @@ func (m Model) renderStatusLine() string {
 	leftInfo := fmt.Sprintf("| %s |", screenName)
 
 	// Right side: terminal dimensions and help
-	rightInfo := fmt.Sprintf("[ %dx%d ]", m.width, m.height)
+	rightInfo := fmt.Sprintf("[ %dx%d ]", m.termWidth, m.termHeight)
 
 	// Calculate spacing
 	totalUsed := len(leftInfo) + len(rightInfo) + 2
-	spacing := m.width - totalUsed
-	if spacing < 0 {
-		spacing = 0
-	}
+	spacing := max(m.termWidth-totalUsed, 0)
 
 	statusContent := leftInfo + strings.Repeat(" ", spacing) + rightInfo
 
-	return statusLineStyle.Width(m.width).Render(statusContent)
+	return statusLineStyle.Width(m.termWidth).Render(statusContent)
 }
 
 // Render command line (when in command mode)
@@ -243,7 +293,7 @@ func (m Model) renderCommandLine() string {
 
 	// Show error if there is one, otherwise show command input
 	if m.commandError != "" {
-		return commandErrorStyle.Width(m.width).Render(fmt.Sprintf(" %s", m.commandError))
+		return commandErrorStyle.Width(m.termWidth).Render(fmt.Sprintf(" %s", m.commandError))
 	}
 
 	commandContent := fmt.Sprintf(" %s%s", prefix, m.commandInput)
@@ -254,9 +304,205 @@ func (m Model) renderCommandLine() string {
 	}
 
 	// Pad to full width
-	if len(commandContent) < m.width {
-		commandContent += strings.Repeat(" ", m.width-len(commandContent))
+	if len(commandContent) < m.termWidth {
+		commandContent += strings.Repeat(" ", m.termWidth-len(commandContent))
 	}
 
-	return commandLineStyle.Width(m.width).Render(commandContent)
+	return commandLineStyle.Width(m.termWidth).Render(commandContent)
+}
+
+// Render the onscreen keyboard
+/*
+
+TODO: This renders the keyboard in a vertical orientation and the keys appear to be too big.
+It should fill the width of the terminal and be more compact.
+*/
+func (m Model) renderKeyboard(maxHeight int) string {
+	if len(m.keyboard.Keys) == 0 {
+		return "No keyboard layout loaded"
+	}
+
+	var info string = ""
+
+	// Key styles
+	normalKeyStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		Background(lipgloss.Color("236")).
+		Foreground(lipgloss.Color("255")).
+		Align(lipgloss.Center).
+		Padding(0, 1)
+
+	pressedKeyStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("46")).
+		Background(lipgloss.Color("46")).
+		Foreground(lipgloss.Color("0")).
+		Align(lipgloss.Center).
+		Padding(0, 1)
+
+	specialKeyStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("33")).
+		Background(lipgloss.Color("237")).
+		Foreground(lipgloss.Color("33")).
+		Align(lipgloss.Center).
+		Padding(0, 1)
+
+	// Group keys by row (Y coordinate)
+	rows := make(map[int][]Key)
+	maxY := 0
+	for _, key := range m.keyboard.Keys {
+		y := int(key.Y)
+		rows[y] = append(rows[y], key)
+		if y > maxY {
+			maxY = y
+		}
+	}
+
+	var keyboardLines []string
+
+	// Calculate available height for keyboard content
+	// Account for border (2 lines), padding (2 lines), margin (2 lines), and info line (3 lines)
+	headerHeight := 7
+	availableHeight := maxHeight - headerHeight
+
+	// Render each row, respecting height constraints
+	renderedRows := 0
+	// info += fmt.Sprintf("Keyboard layout (%d rows):\n", maxY+1)
+	// info += fmt.Sprintf("maxHeight: %d\n", maxHeight)
+	// info += fmt.Sprintf("headerHeight: %d\n", headerHeight)
+	// info += fmt.Sprintf("availableHeight: %d\n", availableHeight)
+	for y := 0; y <= maxY && renderedRows < availableHeight; y++ {
+		// info += fmt.Sprintf("renderedRows: %d\n", renderedRows)
+		if rowKeys, exists := rows[y]; exists {
+			var row []string
+
+			// info += fmt.Sprintf("\nRow %d: ", y)
+			for _, key := range rowKeys {
+				// Determine key label
+				label := ""
+				if len(key.Labels) >= 5 {
+					label = key.Labels[4]
+				} else {
+					label = key.Labels[len(key.Labels)-1]
+				}
+
+				//if strings.HasSuffix(label, "J") {
+				if label == "J" {
+					s, err := PrettyPrint(key)
+					if err == nil {
+						info += fmt.Sprintf("%v\n", s)
+					}
+				}
+
+				// Handle special keys
+				if label == "" {
+					label = "□"
+				}
+
+				// Truncate long labels
+				if len(label) > 8 {
+					label = label[:6] + ".."
+				}
+
+				// Determine key width
+				// width := max(3, int(key.Width)) //min(max(int(key.Width*4), 3), 12)
+				width := min(max(int(key.Width*4), 3), 12)
+
+				// Check if key is pressed
+				// TODO: why is this handling a specific case from the json config which likely won't exist?
+				keyPressed := m.pressedKeys[strings.ToUpper(label)] ||
+					(label == "spaaaaaaaaaaaaaaaaaaaaaaaaaace" && m.pressedKeys["SPACE"])
+
+				// Choose style
+				var style lipgloss.Style
+				if keyPressed {
+					style = pressedKeyStyle
+				} else if isSpecialKey(label) {
+					style = specialKeyStyle
+				} else {
+					style = normalKeyStyle
+				}
+
+				// Apply custom colors if specified
+				if key.Color != "" {
+					style = style.Background(lipgloss.Color(key.Color))
+				}
+				if key.TextColor != "" {
+					style = style.Foreground(lipgloss.Color(key.TextColor))
+				}
+
+				renderedKey := style.Width(width).Render(label)
+				// rowDisplay.WriteString(renderedKey)
+				// rowDisplay.WriteString(" ")
+				// row := lipgloss.JoinHorizontal(lipgloss.Left, renderedKey)
+				row = append(row, renderedKey)
+
+			}
+
+			rowDisplay := lipgloss.JoinHorizontal(lipgloss.Left, row...)
+
+			// info += fmt.Sprintf("\nrowDisplay %v: ", rowDisplay.String())
+			//keyboardLines = append(keyboardLines, rowDisplay.String())
+			keyboardLines = append(keyboardLines, rowDisplay)
+			renderedRows++
+		} else {
+			// info += fmt.Sprintf("\nno rowDisplay %v: ", "_")
+			// If no keys in this row, add an empty line
+			keyboardLines = append(keyboardLines, " x ")
+			renderedRows++
+		}
+	}
+
+	// Add truncation indicator if we couldn't fit all rows
+	// if renderedRows < maxY+1 {
+	// 	keyboardLines = append(keyboardLines, "... (keyboard truncated to fit)")
+	// }
+
+	// Join all rows
+	// keyboard := strings.Join(keyboardLines, "\n")
+	// keyboard := lipgloss.JoinVertical(lipgloss.Left, keyboardLines...)
+
+	// Add keyboard info
+	// TODO: these fields could be empty
+	// info += fmt.Sprintf("keyboard lines: %d\n", len(keyboardLines))
+	// info += fmt.Sprintf("rows: %d\n", len(rows))
+	// info += fmt.Sprintf("rendered rows: %d\n", renderedRows)
+	if m.keyboard.Meta.Name != "" {
+		info += fmt.Sprintf("Keyboard: %s", m.keyboard.Meta.Name)
+	}
+	if m.keyboard.Meta.Author != "" {
+		info += fmt.Sprintf(" by %s", m.keyboard.Meta.Author)
+	}
+
+	// Apply height constraint to the final rendered output
+	//finalContent := info + "\n\n" + keyboard
+	// styledKeyboard := lipgloss.NewStyle().
+	// 	Border(lipgloss.RoundedBorder()).
+	// 	BorderForeground(lipgloss.Color("62")).
+	// 	Padding(1).
+	// 	Margin(1).
+	// 	//Height(maxHeight).
+	// 	Render(keyboard)
+	// 	//Render(finalContent)
+
+	// return styledKeyboard
+	ui := lipgloss.JoinVertical(lipgloss.Left, info) //, styledKeyboard)
+	return ui //m.centerContent(ui)
+}
+
+func isSpecialKey(label string) bool {
+	// TODO: why is this checking specific keys loaded from JSON which likely won't exist?
+	specialKeys := []string{
+		"Tab", "Caps Lock", "Shift", "Enter", "Backspace", "Space",
+		"CMD", "Alt", "FN", "win", "menü", "spaaaaaaaaaaaaaaaaaaaaaaaaaace",
+	}
+
+	for _, special := range specialKeys {
+		if strings.EqualFold(label, special) || strings.Contains(strings.ToLower(label), strings.ToLower(special)) {
+			return true
+		}
+	}
+	return false
 }

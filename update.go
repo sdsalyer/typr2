@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -10,14 +12,14 @@ import (
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
+		m.termWidth = msg.Width
+		m.termHeight = msg.Height
 
 		// Check minimum dimensions
-		if m.width < MinWidth || m.height < MinHeight {
+		if m.termWidth < MinWidth || m.termHeight < MinHeight {
 			m.ready = false
 			m.err = fmt.Errorf("terminal too small: need at least %dx%d, got %dx%d",
-				MinWidth, MinHeight, m.width, m.height)
+				MinWidth, MinHeight, m.termWidth, m.termHeight)
 		} else {
 			m.ready = true
 			m.err = nil
@@ -113,9 +115,68 @@ func (m Model) handleStartScreen(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // Handle main screen input
 func (m Model) handleMainScreen(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// switch msg.String() {
+	// case "esc", "b":
+	// 	return m, func() tea.Msg { return ScreenChangeMsg{StartScreen} }
+	// }
 	switch msg.String() {
-	case "esc", "b":
-		return m, func() tea.Msg { return ScreenChangeMsg{StartScreen} }
+	case "ctrl+c":
+		return m, tea.Quit
+
+	case "tab":
+		// Next prompt
+		m.promptIndex = (m.promptIndex + 1) % len(m.prompts)
+		m.prompt = m.prompts[m.promptIndex]
+		m.userInput = ""
+		m.currentChar = 0
+		m.pressedKeys = make(map[string]bool)
+
+	case "backspace":
+		if len(m.userInput) > 0 {
+			m.userInput = m.userInput[:len(m.userInput)-1]
+			if m.currentChar > 0 {
+				m.currentChar--
+			}
+		}
+
+	default:
+		// Handle regular character input
+		char := msg.String()
+		if len(char) == 1 || char == "space" {
+			if char == "space" {
+				char = " "
+			}
+
+			// Simulate key press
+			keyLabel := strings.ToUpper(char)
+			if char == " " {
+				keyLabel = "SPACE"
+			}
+			m.pressedKeys[keyLabel] = true
+
+			// Clear pressed keys after a short delay
+			go func() {
+				time.Sleep(100 * time.Millisecond)
+				delete(m.pressedKeys, keyLabel)
+			}()
+
+			m.userInput += char
+			if m.currentChar < len(m.prompt) {
+				m.currentChar++
+			}
+
+			// Check if prompt is completed
+			if m.userInput == m.prompt {
+				// Auto advance to next prompt after completion
+				time.AfterFunc(1*time.Second, func() {
+					m.promptIndex = (m.promptIndex + 1) % len(m.prompts)
+					m.prompt = m.prompts[m.promptIndex]
+					m.userInput = ""
+					m.currentChar = 0
+					m.pressedKeys = make(map[string]bool)
+				})
+			}
+		}
 	}
 	return m, nil
 }

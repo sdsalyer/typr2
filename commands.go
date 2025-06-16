@@ -56,7 +56,7 @@ func (m Model) executeCommand(command string) tea.Cmd {
 	case "resize":
 		// Force a window size check (useful for debugging)
 		return func() tea.Msg {
-			return tea.WindowSizeMsg{Width: m.width, Height: m.height}
+			return tea.WindowSizeMsg{Width: m.termWidth, Height: m.termHeight}
 		}
 	case "help":
 		m.commandError = "Commands: q|quit, start|home, main, config|settings, extras, resize, set"

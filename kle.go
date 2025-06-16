@@ -1,55 +1,287 @@
 /*
 Keyboard Layout Editor (KLE) implementation
-github.com/ijprest/kle-serial
+https://github.com/ijprest/kle-serial
 */
 package main
 
+import (
+	// "encoding/json"
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/yosuke-furukawa/json5/encoding/json5"
+	"maps"
+)
+
+// Represents a keyboard layout in KLE format
+// See: https://github.com/ijprest/kle-serial?tab=readme-ov-file#keyboard-objects
 type Keyboard struct {
-	meta KeyboardMetadata
-	keys []Key
+	Meta KeyboardMetadata `json:"meta"`
+	Keys []Key            `json:"keys"`
 }
 
+// Represents a keyboard's metadata in KLE format (Name, Author, etc.)
+// See: https://github.com/ijprest/kle-serial?tab=readme-ov-file#keyboard-metadata
 type KeyboardMetadata struct {
-	author    string
-	backcolor string
-	//background { name string style string } | null
-	name        string
-	notes       string
-	radii       string
-	switchBrand string
-	switchMount string
-	switchType  string
+	Author      string `json:"author"`
+	Backcolor   string `json:"backcolor"`
+	Name        string `json:"name"`
+	Notes       string `json:"notes"`
+	Radii       string `json:"radii"`
+	SwitchBrand string `json:"switchBrand"`
+	SwitchMount string `json:"switchMount"`
+	SwitchType  string `json:"switchType"`
 }
 
+// See: https://github.com/ijprest/kle-serial?tab=readme-ov-file#keys
 type Key struct {
-	color  string
-	labels []string
-	//textColor Array<string | undefined>
-	//textSize Array<number | undefined>
-	//default { textColor string textSize number }
+	Color  string   `json:"color"`
+	Labels []string `json:"labels"` // An array of up to 12 labels
+	/*
+		These are split by "\n" from the JSON
+		Positioned as such:
+		[
+		  0,  1,  2,
+		  3,  4,  5,
+		  6,  7,  8,
+		  9, 10, 11 // These are "front legends"
+		]
+	*/
 
-	x      uint8
-	y      uint8
-	width  uint8
-	height uint8
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
+	Width  float64 `json:"width"`
+	Height float64 `json:"height"`
 
-	x2      uint8
-	y2      uint8
-	width2  uint8
-	height2 uint8
+	X2      float64 `json:"x2"`
+	Y2      float64 `json:"y2"`
+	Width2  float64 `json:"width2"`
+	Height2 float64 `json:"height2"`
 
-	rotation_x     uint8
-	rotation_y     uint8
-	rotation_angle uint8
+	RotationX     float64 `json:"rotation_x"`
+	RotationY     float64 `json:"rotation_y"`
+	RotationAngle float64 `json:"rotation_angle"`
 
-	decal   bool
-	ghost   bool
-	stepped bool
-	nub     bool
+	Decal   bool `json:"decal"`
+	Ghost   bool `json:"ghost"`
+	Stepped bool `json:"stepped"`
+	Nub     bool `json:"nub"`
 
-	profile string
+	Profile string `json:"profile"`
 
-	sm string // switch mount
-	sb string // switch brand
-	st string // switch type
+	SM string `json:"sm"` // switch mount
+	SB string `json:"sb"` // switch brand
+	ST string `json:"st"` // switch type
+
+	// Additional fields for rendering
+	TextColor string `json:"textColor"`
+	FontSize  int    `json:"fontSize"`
+}
+
+// parseKLELayout parses the KLE JSON format into our Keyboard struct
+func parseKLELayout(data []byte) (Keyboard, error) {
+	var rawData []any
+	if err := json5.Unmarshal(data, &rawData); err != nil {
+		return Keyboard{}, fmt.Errorf("failed to parse JSON5: %w", err)
+	}
+
+	keyboard := Keyboard{
+		Keys: []Key{},
+	}
+
+	// Parse metadata from first object
+	if len(rawData) > 0 {
+		if metaObj, ok := rawData[0].(map[string]any); ok {
+			keyboard.Meta = parseMetadata(metaObj)
+		}
+	}
+
+	// Parse key rows
+	currentY := 0.0
+	currentX := 0.0
+
+	for i, row := range rawData {
+		if i == 0 {
+			continue // Skip metadata
+		}
+
+		if rowArray, ok := row.([]any); ok {
+			currentX = 0.0
+			keys := parseKeyRow(rowArray, currentX, currentY)
+			keyboard.Keys = append(keyboard.Keys, keys...)
+			currentY += 1.0
+		}
+	}
+
+	return keyboard, nil
+}
+
+func parseMetadata(obj map[string]any) KeyboardMetadata {
+	meta := KeyboardMetadata{}
+
+	if name, ok := obj["name"].(string); ok {
+		meta.Name = name
+	}
+	if author, ok := obj["author"].(string); ok {
+		meta.Author = author
+	}
+	if notes, ok := obj["notes"].(string); ok {
+		meta.Notes = notes
+	}
+	if radii, ok := obj["radii"].(string); ok {
+		meta.Radii = radii
+	}
+	if switchMount, ok := obj["switchMount"].(string); ok {
+		meta.SwitchMount = switchMount
+	}
+
+	return meta
+}
+
+func parseKeyRow(row []any, startX, y float64) []Key {
+	var keys []Key
+	currentX := startX
+
+	// Current key properties (carried forward)
+	var currentProps map[string]any
+
+	for _, item := range row {
+		switch v := item.(type) {
+		case map[string]any:
+			// Key properties
+			currentProps = mergeProps(currentProps, v)
+
+			// Handle X offset
+			if x, ok := v["x"].(float64); ok {
+				currentX += x
+			}
+
+		case string:
+			// Key label - create key
+			key := Key{
+				// Labels: []string{v},
+				Labels: parseLabels(v),
+				// Labels: reorderLabels(strings.Split(v, "\n"), alignment),
+				X:      currentX,
+				Y:      y,
+				Width:  1.0,
+				Height: 1.0,
+			}
+
+			// Apply current properties
+			if currentProps != nil {
+				applyKeyProps(&key, currentProps)
+			}
+
+			keys = append(keys, key)
+			currentX += key.Width
+		}
+	}
+
+	return keys
+}
+
+func mergeProps(existing, new map[string]any) map[string]any {
+	if existing == nil {
+		existing = make(map[string]any)
+	}
+
+	maps.Copy(existing, new)
+
+	return existing
+}
+
+func applyKeyProps(key *Key, props map[string]any) {
+	if w, ok := props["w"].(float64); ok {
+		key.Width = w
+	}
+	if h, ok := props["h"].(float64); ok {
+		key.Height = h
+	}
+	if c, ok := props["c"].(string); ok {
+		key.Color = c
+	}
+	if t, ok := props["t"].(string); ok {
+		key.TextColor = t
+	}
+	if f, ok := props["f"].(float64); ok {
+		key.FontSize = int(f)
+	}
+	// Add more property mappings as needed
+}
+
+func loadKeyboard(filename string) (Keyboard, error) {
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return Keyboard{}, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	return parseKLELayout(data)
+}
+
+/*
+  function reorderLabelsIn(labels, align) {
+    var ret: Array<any> = [];
+    for (var i = 0; i < labels.length; ++i) {
+      if (labels[i]) ret[labelMap[align][i]] = labels[i];
+    }
+    return ret;
+  }
+*/
+func reorderLabels(labels []string, align int) []string {
+	labelMap := [][]int{
+		// 0   1   2   3   4   5   6   7   8   9  10  11   // align flags
+		{  0,  6,  2,  8,  9, 11,  3,  5,  1,  4,  7, 10}, // 0 = no centering
+		{  1,  7, -1, -1,  9, 11,  4, -1, -1, -1, -1, 10}, // 1 = center x
+		{  3, -1,  5, -1,  9, 11, -1, -1,  4, -1, -1, 10}, // 2 = center y
+		{  4, -1, -1, -1,  9, 11, -1, -1, -1, -1, -1, 10}, // 3 = center x & y
+		{  0,  6,  2,  8, 10, -1,  3,  5,  1,  4,  7, -1}, // 4 = center front (default)
+		{  1,  7, -1, -1, 10, -1,  4, -1, -1, -1, -1, -1}, // 5 = center front & x
+		{  3, -1,  5, -1, 10, -1, -1, -1,  4, -1, -1, -1}, // 6 = center front & y
+		{  4, -1, -1, -1, 10, -1, -1, -1, -1, -1, -1, -1}, // 7 = center front & x & y
+	}
+
+	var retVal []string = make([]string, len(labels))
+	for i := range labels {
+		newIndex := labelMap[align][i]
+		if newIndex == -1 {
+			continue // Don't reorder this index
+	 	}
+		retVal[newIndex] = labels[i]
+	}
+
+	return retVal
+}
+
+func parseLabels(labelStr string) []string {
+	// Split labels by newline and trim whitespace
+	// Map from serialized label position to normalized position,
+	// depending on the alignment flags.
+	
+	labels := strings.Split(labelStr, "\n")
+	for i := range 12 {
+		if i >= len(labels) {
+			labels = append(labels, "") // Fill missing labels with empty strings
+		} else {
+			// TODO: sanitize user input, may contain arbitrary HTML content
+			labels[i] = strings.TrimSpace(labels[i])
+		}
+	}
+	if len(labels) != 12 {
+		panic(fmt.Sprintf("Expected 12 labels, got %d: %v", len(labels), labels))
+	}
+
+	// TODO: Handle alignment flags
+	alignment := 4 // Default to center front alignment
+	return reorderLabels(labels, alignment)
+}
+
+// This should format the value of any marshalable type into a pretty-printed JSON5 string
+func PrettyPrint[T any](v T) (string, error) {
+	prettyJSON, err := json5.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(prettyJSON), nil
 }

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"log"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -37,8 +39,8 @@ const (
 // Main application model
 type Model struct {
 	currentScreen Screen
-	width         int
-	height        int
+	termWidth     int
+	termHeight    int
 	ready         bool
 	err           error
 	menuSelection int // For navigating menu items
@@ -46,10 +48,30 @@ type Model struct {
 	commandInput  string
 	commandError  string
 	config        Config
+	keyboard      Keyboard
+	prompt        string
+	userInput     string
+	currentChar   int
+	prompts       []string
+	promptIndex   int
+	pressedKeys   map[string]bool
 }
 
 // Initialize the application
-func InitialModel() Model {
+func InitialModel(config string) Model {
+	var prompts = []string{
+		"Pack my box with five dozen liquor jugs.",
+		"The quick brown fox jumps over the lazy dog.",
+		"Waltz, bad nymph, for quick jigs vex.",
+		"How vexingly quick daft zebras jump!",
+		"Bright vixens jump; dozy fowl quack.",
+	}
+
+	kb, err := loadKeyboard(config)
+	if err != nil {
+		log.Fatalf("Failed to load keyboard: %v", err)
+	}
+
 	return Model{
 		currentScreen: StartScreen,
 		ready:         false,
@@ -58,6 +80,13 @@ func InitialModel() Model {
 		commandInput:  "",
 		commandError:  "",
 		config:        DefaultConfig(),
+		keyboard:      kb,
+		prompts:       prompts,
+		promptIndex:   0,
+		prompt:        prompts[0],
+		userInput:     "",
+		currentChar:   0,
+		pressedKeys:   make(map[string]bool),
 	}
 }
 
