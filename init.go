@@ -59,6 +59,8 @@ type Model struct {
 
 // Initialize the application
 func InitialModel(config string) Model {
+	log.Println("init.InitialModel()")
+
 	var prompts = []string{
 		"Pack my box with five dozen liquor jugs.",
 		"The quick brown fox jumps over the lazy dog.",
@@ -92,5 +94,6 @@ func InitialModel(config string) Model {
 
 // Init method (required by tea.Model interface)
 func (m Model) Init() tea.Cmd {
+	log.Println("init.Init()")
 	return nil
 }

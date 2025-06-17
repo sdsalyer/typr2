@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -326,28 +327,31 @@ func (m Model) renderKeyboard(maxHeight int) string {
 
 	// Key styles
 	normalKeyStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("240")).
-		Background(lipgloss.Color("236")).
-		Foreground(lipgloss.Color("255")).
-		Align(lipgloss.Center).
-		Padding(0, 1)
+		// Border(lipgloss.RoundedBorder()).
+		// BorderForeground(lipgloss.Color("240")).
+		// Background(lipgloss.Color("236")).
+		// Foreground(lipgloss.Color("255")).
+		// Align(lipgloss.Center).
+		// Padding(0, 1)
+		Padding(0)
 
 	pressedKeyStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("46")).
-		Background(lipgloss.Color("46")).
-		Foreground(lipgloss.Color("0")).
-		Align(lipgloss.Center).
-		Padding(0, 1)
+		// Border(lipgloss.RoundedBorder()).
+		// BorderForeground(lipgloss.Color("46")).
+		// Background(lipgloss.Color("46")).
+		// Foreground(lipgloss.Color("0")).
+		// Align(lipgloss.Center).
+		// Padding(0, 1)
+		Padding(0)
 
 	specialKeyStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("33")).
-		Background(lipgloss.Color("237")).
-		Foreground(lipgloss.Color("33")).
-		Align(lipgloss.Center).
-		Padding(0, 1)
+		// Border(lipgloss.RoundedBorder()).
+		// BorderForeground(lipgloss.Color("33")).
+		// Background(lipgloss.Color("237")).
+		// Foreground(lipgloss.Color("33")).
+		// Align(lipgloss.Center).
+		// Padding(0, 1)
+		Padding(0)
 
 	// Group keys by row (Y coordinate)
 	rows := make(map[int][]Key)
@@ -358,6 +362,33 @@ func (m Model) renderKeyboard(maxHeight int) string {
 		if y > maxY {
 			maxY = y
 		}
+	}
+	
+
+	// info += fmt.Sprintf("# rows: %d\n", len(rows))
+	for r := range rows {
+	// for r := len(rows); r > 0; r-- {
+		// info += fmt.Sprintf(" > row[%d]:\n", r)
+		for range rows[r] {
+			info += fmt.Sprint("┌   ┐")
+		}
+		info += fmt.Sprint("\n")
+		for k := range rows[r] {
+			currentRow := rows[r][k]
+			label := currentRow.Labels[0]
+			if len(label) > 1 {
+				label = string(label[0])
+			} else if len(label) == 0 {
+				label = " "
+			}
+			//info += fmt.Sprintf("| %v |", label)
+			log.Printf("%v is %.2fu w x %.2fu h", strings.Join(currentRow.Labels, ""), currentRow.Width, currentRow.Height)
+		}
+		info += fmt.Sprint("\n")
+		for range rows[r] {
+			info += fmt.Sprint("└   ┘")
+		}
+		info += fmt.Sprint("\n")
 	}
 
 	var keyboardLines []string
@@ -476,6 +507,8 @@ func (m Model) renderKeyboard(maxHeight int) string {
 		//Height(maxHeight).
 		Render(keyboard)
 		//Render(finalContent)
+
+	styledKeyboard = ""
 
 	// return styledKeyboard
 	ui := lipgloss.JoinVertical(lipgloss.Left, info, styledKeyboard)

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -10,16 +11,22 @@ import (
 
 // Update function
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	log.Print("update.Update()")
+	log.Printf("msg: %v", msg)
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.termWidth = msg.Width
 		m.termHeight = msg.Height
+
+		log.Printf("termWidth: %d", m.termWidth)
+		log.Printf("termHeight: %d", m.termHeight)
 
 		// Check minimum dimensions
 		if m.termWidth < MinWidth || m.termHeight < MinHeight {
 			m.ready = false
 			m.err = fmt.Errorf("terminal too small: need at least %dx%d, got %dx%d",
 				MinWidth, MinHeight, m.termWidth, m.termHeight)
+			log.Printf("Error: %v", m.err)
 		} else {
 			m.ready = true
 			m.err = nil
@@ -43,9 +50,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Global navigation keys (only in normal mode)
 		switch msg.String() {
 		case "ctrl+c":
+			log.Println("Quitting...")
 			return m, tea.Quit
 		case "q":
 			if m.currentScreen == StartScreen {
+				log.Println("Quitting...")
 				return m, tea.Quit
 			}
 		case m.config.CommandKey:
@@ -73,6 +82,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case ScreenChangeMsg:
+		log.Printf("change screen from [ %v ] to [ %v ]", m.currentScreen, msg.screen)
 		m.currentScreen = msg.screen
 		return m, nil
 	}

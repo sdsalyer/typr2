@@ -170,6 +170,8 @@ func parseKeyRow(row []any, startX, y float64) []Key {
 			// Apply current properties
 			if currentProps != nil {
 				applyKeyProps(&key, currentProps)
+				// Reset the properties so subsequent keys don't get the wrong props
+				currentProps = nil
 			}
 
 			key.Labels = parseLabels(v, key.Alignment)
@@ -284,7 +286,12 @@ func parseLabels(labelStr string, alignment int) []string {
 			labels = append(labels, "") // Fill missing labels with empty strings
 		} else {
 			// TODO: sanitize user input, may contain arbitrary HTML content
-			labels[i] = strings.TrimSpace(labels[i])
+			newLabel := strings.TrimSpace(labels[i])
+			if len(newLabel) == 0 {
+				// Must be the SPACE key
+				newLabel = "␣"
+			}
+			labels[i] = newLabel
 		}
 	}
 	if len(labels) != 12 {
