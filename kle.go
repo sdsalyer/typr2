@@ -49,8 +49,10 @@ type Key struct {
 		]
 	*/
 
-	X      float64 `json:"x"`
-	Y      float64 `json:"y"`
+	// TODO: we are ignoring the x,y coordinates and assuming row and col position
+	// X      float64 `json:"x"`
+	// Y      float64 `json:"y"`
+
 	Width  float64 `json:"width"`
 	Height float64 `json:"height"`
 
@@ -66,7 +68,7 @@ type Key struct {
 	Decal   bool `json:"decal"`
 	Ghost   bool `json:"ghost"`
 	Stepped bool `json:"stepped"`
-	Nub     bool `json:"nub"`	// Bump for "homing" (i.e. F and J on QWERTY home row)
+	Nub     bool `json:"nub"` // Bump for "homing" (i.e. F and J on QWERTY home row)
 
 	Profile string `json:"profile"`
 
@@ -78,6 +80,8 @@ type Key struct {
 	Alignment int    `json:"alignment"`
 	FontSize  int    `json:"fontSize"`
 	TextColor string `json:"textColor"`
+	X         int    `json:"x_pos"` // column/position in the row
+	Y         int    `json:"y_pos"` // row number
 }
 
 // parseKLELayout parses the KLE JSON format into our Keyboard struct
@@ -99,19 +103,21 @@ func parseKLELayout(data []byte) (Keyboard, error) {
 	}
 
 	// Parse key rows
-	currentY := 0.0
-	currentX := 0.0
+	// TODO: while these can be decimals in the KLE layout, i'm not sure it makes
+	//       sense from a TUI perspective to have fractional rows or rotated keys
+	//       For now, changing to int for positional value and ignore the KLE x/y
+	currentY := 0
+	currentX := 0
 
-	for i, row := range rawData {
-		if i == 0 {
-			continue // Skip metadata
-		}
+	for _, row := range rawData {
 
+		// Metadata is already parsed and inherently skipped by iterating
+		// arrays from the JSON here
 		if rowArray, ok := row.([]any); ok {
-			currentX = 0.0
+			currentX = 0
 			keys := parseKeyRow(rowArray, currentX, currentY)
 			keyboard.Keys = append(keyboard.Keys, keys...)
-			currentY += 1.0
+			currentY += 1
 		}
 	}
 
@@ -140,7 +146,7 @@ func parseMetadata(obj map[string]any) KeyboardMetadata {
 	return meta
 }
 
-func parseKeyRow(row []any, startX, y float64) []Key {
+func parseKeyRow(row []any, startX int, y int) []Key {
 	var keys []Key
 	currentX := startX
 
@@ -153,10 +159,11 @@ func parseKeyRow(row []any, startX, y float64) []Key {
 			// Key properties
 			currentProps = mergeProps(currentProps, v)
 
+			// TODO: we ignore the x coordinate and assume an x position
 			// Handle X offset
-			if x, ok := v["x"].(float64); ok {
-				currentX += x
-			}
+			// if x, ok := v["x"].(float64); ok {
+			// 	currentX += x
+			// }
 
 		case string:
 			// Key label - create key
@@ -177,7 +184,9 @@ func parseKeyRow(row []any, startX, y float64) []Key {
 			key.Labels = parseLabels(v, key.Alignment)
 
 			keys = append(keys, key)
-			currentX += key.Width
+			// TODO: we're incrementing position, not adding to coordinate
+			// currentX += key.Width
+			currentX += 1
 		}
 	}
 
@@ -230,7 +239,7 @@ func applyKeyProps(key *Key, props map[string]any) {
 	if g, ok := props["g"].(bool); ok {
 		key.Ghost = g
 	}
-	
+
 	if n, ok := props["n"].(bool); ok {
 		key.Nub = n
 	}
@@ -255,14 +264,14 @@ func reorderLabels(labels []string, alignment int) []string {
 	// depending on the alignment flags.
 	labelMap := [][]int{
 		// 0   1   2   3   4   5   6   7   8   9  10  11   // alignment flags
-		{  0,  6,  2,  8,  9, 11,  3,  5,  1,  4,  7, 10}, // 0 = no centering
-		{  1,  7, -1, -1,  9, 11,  4, -1, -1, -1, -1, 10}, // 1 = center x
-		{  3, -1,  5, -1,  9, 11, -1, -1,  4, -1, -1, 10}, // 2 = center y
-		{  4, -1, -1, -1,  9, 11, -1, -1, -1, -1, -1, 10}, // 3 = center x & y
-		{  0,  6,  2,  8, 10, -1,  3,  5,  1,  4,  7, -1}, // 4 = center front (default)
-		{  1,  7, -1, -1, 10, -1,  4, -1, -1, -1, -1, -1}, // 5 = center front & x
-		{  3, -1,  5, -1, 10, -1, -1, -1,  4, -1, -1, -1}, // 6 = center front & y
-		{  4, -1, -1, -1, 10, -1, -1, -1, -1, -1, -1, -1}, // 7 = center front & x & y
+		{0, 6, 2, 8, 9, 11, 3, 5, 1, 4, 7, 10},          // 0 = no centering
+		{1, 7, -1, -1, 9, 11, 4, -1, -1, -1, -1, 10},    // 1 = center x
+		{3, -1, 5, -1, 9, 11, -1, -1, 4, -1, -1, 10},    // 2 = center y
+		{4, -1, -1, -1, 9, 11, -1, -1, -1, -1, -1, 10},  // 3 = center x & y
+		{0, 6, 2, 8, 10, -1, 3, 5, 1, 4, 7, -1},         // 4 = center front (default)
+		{1, 7, -1, -1, 10, -1, 4, -1, -1, -1, -1, -1},   // 5 = center front & x
+		{3, -1, 5, -1, 10, -1, -1, -1, 4, -1, -1, -1},   // 6 = center front & y
+		{4, -1, -1, -1, 10, -1, -1, -1, -1, -1, -1, -1}, // 7 = center front & x & y
 	}
 
 	var retVal []string = make([]string, len(labels))
@@ -270,7 +279,7 @@ func reorderLabels(labels []string, alignment int) []string {
 		newIndex := labelMap[alignment][i]
 		if newIndex == -1 {
 			continue // Don't reorder this index
-	 	}
+		}
 		retVal[newIndex] = labels[i]
 	}
 
@@ -279,7 +288,7 @@ func reorderLabels(labels []string, alignment int) []string {
 
 func parseLabels(labelStr string, alignment int) []string {
 	// Split labels by newline and trim whitespace
-	
+
 	labels := strings.Split(labelStr, "\n")
 	for i := range 12 {
 		if i >= len(labels) {

@@ -382,7 +382,10 @@ func (m Model) renderKeyboard(maxHeight int) string {
 				label = " "
 			}
 			//info += fmt.Sprintf("| %v |", label)
-			log.Printf("%v is %.2fu w x %.2fu h", strings.Join(currentRow.Labels, ""), currentRow.Width, currentRow.Height)
+			log.Printf("%v is [%.2fu x %.2fu] at (%d, %d)",
+				strings.Join(currentRow.Labels, ""),
+				currentRow.Width, currentRow.Height,
+				currentRow.X, currentRow.Y)
 		}
 		info += fmt.Sprint("\n")
 		for range rows[r] {
