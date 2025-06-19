@@ -8,8 +8,12 @@ import (
 
 // Minimum terminal dimensions
 const (
-	MinWidth  = 80
-	MinHeight = 24
+	// MinWidth  = 80
+	// MinHeight = 24
+	
+	// Currently need 88x27 just to display 15u x 5u keyboard
+	MinWidth  = 88
+	MinHeight = 27+11
 )
 
 // Screen types

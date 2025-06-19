@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	// "math"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -90,6 +91,7 @@ func (m Model) renderStartScreen() string {
 
 // Render main screen
 func (m Model) renderMainScreen() string {
+	log.Println("view.renderMainScreen()")
 	// 	title := titleStyle.Render("📱 Main Application")
 	//
 	// 	content := contentStyle.Render(`This is the main application screen.
@@ -107,57 +109,19 @@ func (m Model) renderMainScreen() string {
 	// 	ui := lipgloss.JoinVertical(lipgloss.Left, title, content, help)
 	// 	return m.centerContent(ui)
 
-	title := titleStyle.Render("📱 Main Application")
+	// title := titleStyle.Render("📱 Main Application")
 	// Calculate dimensions
+	// if h=24, then 8 rows for prompt and 16 for kb,
+	// or approx 3 rows per "key" if 5 rows
 	promptHeight := m.termHeight / 3
 	keyboardHeight := m.termHeight - promptHeight
 
-	// Style definitions
-	promptStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("62")).
-		Padding(1, 2).
-		Margin(1)
-
-	correctStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("46"))                                    // Green
-	incorrectStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("196"))                                 // Red
-	currentStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("226")).Background(lipgloss.Color("240")) // Yellow bg
-	futureStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))                                    // Gray
-
-	// Build prompt display
-	var promptDisplay strings.Builder
-	for i, char := range m.prompt {
-		if i < len(m.userInput) {
-			// Character has been typed
-			if i < len(m.userInput) && rune(m.userInput[i]) == char {
-				promptDisplay.WriteString(correctStyle.Render(string(char)))
-			} else {
-				promptDisplay.WriteString(incorrectStyle.Render(string(char)))
-			}
-		} else if i == m.currentChar {
-			// Current character to type
-			promptDisplay.WriteString(currentStyle.Render(string(char)))
-		} else {
-			// Future characters
-			promptDisplay.WriteString(futureStyle.Render(string(char)))
-		}
-	}
-
-	// Progress info
-	progress := fmt.Sprintf("Progress: %d/%d characters | Prompt %d/%d",
-		len(m.userInput), len(m.prompt), m.promptIndex+1, len(m.prompts))
-
-	instructions := "Tab: Next prompt | Ctrl+C/Q: Quit"
-
-	promptSection := promptStyle.Render(
-		fmt.Sprintf("Type: %s\n\n%s\n\n%s\n%s",
-			m.prompt, promptDisplay.String(), progress, instructions))
-
 	// Build keyboard display
+	promptSection := m.renderPrompt(promptHeight)
 	keyboardSection := m.renderKeyboard(keyboardHeight)
 
 	// return promptSection + "\n" + keyboardSection
-	ui := lipgloss.JoinVertical(lipgloss.Left, title, promptSection, keyboardSection)
+	ui := lipgloss.JoinVertical(lipgloss.Left, promptSection, keyboardSection)
 	return m.centerContent(ui)
 }
 
@@ -326,6 +290,7 @@ func (m Model) renderKeyboard(maxHeight int) string {
 	var info string = ""
 
 	// Key styles
+	// TODO: get colors from keys
 	normalKeyStyle := lipgloss.NewStyle().
 		// Border(lipgloss.RoundedBorder()).
 		// BorderForeground(lipgloss.Color("240")).
@@ -354,52 +319,58 @@ func (m Model) renderKeyboard(maxHeight int) string {
 		Padding(0)
 
 	// Group keys by row (Y coordinate)
-	rows := make(map[int][]Key)
-	maxY := 0
-	for _, key := range m.keyboard.Keys {
-		y := int(key.Y)
-		rows[y] = append(rows[y], key)
-		if y > maxY {
-			maxY = y
-		}
-	}
-	
+	rows := m.getKeyboardRows()
 
-	// info += fmt.Sprintf("# rows: %d\n", len(rows))
-	for r := range rows {
-	// for r := len(rows); r > 0; r-- {
-		// info += fmt.Sprintf(" > row[%d]:\n", r)
-		for range rows[r] {
-			info += fmt.Sprint("┌   ┐")
-		}
-		info += fmt.Sprint("\n")
-		for k := range rows[r] {
-			currentRow := rows[r][k]
-			label := currentRow.Labels[0]
-			if len(label) > 1 {
-				label = string(label[0])
-			} else if len(label) == 0 {
-				label = " "
-			}
-			//info += fmt.Sprintf("| %v |", label)
-			log.Printf("%v is [%.2fu x %.2fu] at (%d, %d)",
-				strings.Join(currentRow.Labels, ""),
-				currentRow.Width, currentRow.Height,
-				currentRow.X, currentRow.Y)
-		}
-		info += fmt.Sprint("\n")
-		for range rows[r] {
-			info += fmt.Sprint("└   ┘")
-		}
-		info += fmt.Sprint("\n")
-	}
+	/*
+		DEBUG CODE - REMOVE
+	*/
+	// {
+	// 	// info += fmt.Sprintf("# rows: %d\n", len(rows))
+	// 	for r := range rows {
+	// 		// for r := len(rows); r > 0; r-- {
+	// 		// info += fmt.Sprintf(" > row[%d]:\n", r)
+	// 		for range rows[r] {
+	// 			info += fmt.Sprint("┌   ┐")
+	// 		}
+	// 		info += fmt.Sprint("\n")
+	// 		for k := range rows[r] {
+	// 			currentRow := rows[r][k]
+	// 			label := currentRow.Labels[0]
+	// 			if len(label) > 1 {
+	// 				label = string(label[0])
+	// 			} else if len(label) == 0 {
+	// 				label = " "
+	// 			}
+	// 			//info += fmt.Sprintf("| %v |", label)
+	// 			log.Printf("%v is [%.2fu x %.2fu] at (%d, %d)",
+	// 				strings.Join(currentRow.Labels, ""),
+	// 				currentRow.Width, currentRow.Height,
+	// 				currentRow.X, currentRow.Y)
+	// 		}
+	// 		info += fmt.Sprint("\n")
+	// 		for range rows[r] {
+	// 			info += fmt.Sprint("└   ┘")
+	// 		}
+	// 		info += fmt.Sprint("\n")
+	// 	}
+	// }
+	/*
+		END DEBUG CODE
+	*/
 
 	var keyboardLines []string
 
 	// Calculate available height for keyboard content
-	// Account for border (2 lines), padding (2 lines), margin (2 lines), and info line (3 lines)
-	headerHeight := 7
+	// TODO: ??claude?? Account for border (2 lines), padding (2 lines), margin (2 lines), and info line (3 lines)
+	//       maxHeight should already be 2/3 of term rows
+	headerHeight := 0
 	availableHeight := maxHeight - headerHeight
+	// keyboardWidth := getKeyboardWidth(rows)
+	// how many columns wide a 1u key can be
+	// one unit should be 4 columns wide - this allows for dividing into fourths for certain key sizes
+
+	keyUnitWidth := 4
+	//maxUnitWidth := math.Round(float64(m.termWidth) / (keyboardWidth * float64(keyUnitWidth)))
 
 	// Render each row, respecting height constraints
 	renderedRows := 0
@@ -407,7 +378,7 @@ func (m Model) renderKeyboard(maxHeight int) string {
 	// info += fmt.Sprintf("maxHeight: %d\n", maxHeight)
 	// info += fmt.Sprintf("headerHeight: %d\n", headerHeight)
 	// info += fmt.Sprintf("availableHeight: %d\n", availableHeight)
-	for y := 0; y <= maxY && renderedRows < availableHeight; y++ {
+	for y := 0; y <= len(rows) && renderedRows < availableHeight; y++ {
 		// info += fmt.Sprintf("renderedRows: %d\n", renderedRows)
 		if rowKeys, exists := rows[y]; exists {
 			var row []string
@@ -421,18 +392,36 @@ func (m Model) renderKeyboard(maxHeight int) string {
 				// } else {
 				// 	label = key.Labels[0]
 				// }
-				
-				// Keys have up to 12 labels, in 3 columns and 3 rows, plus a "front face" row
-				label1 := lipgloss.JoinHorizontal(lipgloss.Left, key.Labels[:3]...)
-				label2 := lipgloss.JoinHorizontal(lipgloss.Left, key.Labels[3:6]...)
-				label3 := lipgloss.JoinHorizontal(lipgloss.Left, key.Labels[6:9]...)
-				label4 := lipgloss.JoinHorizontal(lipgloss.Left, key.Labels[9:]...)
 
-				label := lipgloss.JoinVertical(lipgloss.Left, label1, label2, label3, label4)
+				// Keys have up to 12 labels, in 3 columns and 3 rows, plus a "front face" row
+				label1 := lipgloss.JoinHorizontal(lipgloss.Top, key.Labels[:3]...)
+				label2 := lipgloss.JoinHorizontal(lipgloss.Top, key.Labels[3:6]...)
+				label3 := lipgloss.JoinHorizontal(lipgloss.Top, key.Labels[6:9]...)
+				// TODO: for now, ignoring front labels
+				// label4 := lipgloss.JoinHorizontal(lipgloss.Top, key.Labels[9:]...)
+
 
 				// Determine key width
 				// width := max(3, int(key.Width)) //min(max(int(key.Width*4), 3), 12)
-				width := min(max(int(key.Width*4), 3), 12)
+				// width := min(max(int(key.Width*4), 3), 12)
+
+				// convert key unit width to actual terminal column width
+				keyWidth := max(keyUnitWidth, int(key.Width*float64(keyUnitWidth)))
+				log.Printf("%f key.Width -> %d term cols", key.Width, keyWidth)
+
+				// Shorten labels that are too long
+				if keyWidth < len(label1) {
+					label1 = label1[:keyWidth]
+				}
+				if keyWidth < len(label2) {
+					label2 = label2[:keyWidth]
+				}
+				if keyWidth < len(label1) {
+					label3 = label3[:keyWidth]
+				}
+
+				// Join the label rows to form the keycap
+				label := lipgloss.JoinVertical(lipgloss.Left, label1, label2, label3) //, label4)
 
 				// Check if key is pressed
 				// TODO: this now needs to check what the actual key is vs. what the label(s) might contain...
@@ -456,27 +445,77 @@ func (m Model) renderKeyboard(maxHeight int) string {
 				if key.TextColor != "" {
 					style = style.Foreground(lipgloss.Color(key.TextColor))
 				}
+/*
+sizes...
+... just for the keyboard
 
-				renderedKey := style.Width(width).Render(label)
+// Normal border
+8*15=120 wide
+5*5=25 tall
+┌──────┐
+│~     │
+│      │
+│`     │
+└──────┘
+
+// Rounded border
+// same as normal border
+╭──────╮
+│~     │
+│      │
+│`     │
+╰──────╯
+
+// no border:
+6x15=90 wide
+3x5=15 tall
+~     
+      
+`     
+
+
+and then...
+
+// 8 + 2 for the border = 10 cols for a 2u key
+// but... it's 4 tall, should only be 3 tall
+╭────────╮
+│Backspac│
+│e       │
+│        │
+│        │
+╰────────╯
+
+// 1u key is 4 wide + 2 border = 6 and 3+2=5 tall
+// we could stand to pad it and make it 6 wide + 2 border = 8 columns but then it's 120 wide minimum
+╭────╮
+│~   │
+│    │
+│`   │
+╰────╯
+*/
+
+				width := int(keyWidth)
+				renderedKey := style.
+					Border(lipgloss.RoundedBorder()).
+					Width(width).
+					Height(3).
+					Render(label)
 				// rowDisplay.WriteString(renderedKey)
 				// rowDisplay.WriteString(" ")
-				// row := lipgloss.JoinHorizontal(lipgloss.Left, renderedKey)
+				// row := lipgloss.JoinHorizontal(lipgloss.Top, renderedKey)
+				log.Printf("\n%s\n", renderedKey)
 				row = append(row, renderedKey)
 
 			}
 
-			rowDisplay := lipgloss.JoinHorizontal(lipgloss.Left, row...)
+			rowDisplay := lipgloss.JoinHorizontal(lipgloss.Top, row...)
 
 			// info += fmt.Sprintf("\nrowDisplay %v: ", rowDisplay.String())
 			//keyboardLines = append(keyboardLines, rowDisplay.String())
 			keyboardLines = append(keyboardLines, rowDisplay)
 			renderedRows++
-		} else {
-			// info += fmt.Sprintf("\nno rowDisplay %v: ", "_")
-			// If no keys in this row, add an empty line
-			keyboardLines = append(keyboardLines, " x ")
-			renderedRows++
 		}
+		// TODO: Else for empty rows?
 	}
 
 	// Add truncation indicator if we couldn't fit all rows
@@ -486,7 +525,7 @@ func (m Model) renderKeyboard(maxHeight int) string {
 
 	// Join all rows
 	// keyboard := strings.Join(keyboardLines, "\n")
-	keyboard := lipgloss.JoinVertical(lipgloss.Left, keyboardLines...)
+	keyboard := lipgloss.JoinVertical(lipgloss.Center, keyboardLines...)
 
 	// Add keyboard info
 	// TODO: these fields could be empty
@@ -503,19 +542,101 @@ func (m Model) renderKeyboard(maxHeight int) string {
 	// Apply height constraint to the final rendered output
 	//finalContent := info + "\n\n" + keyboard
 	styledKeyboard := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("62")).
-		Padding(1).
-		Margin(1).
+		// Border(lipgloss.RoundedBorder()).
+		// BorderForeground(lipgloss.Color("62")).
+		// Padding(1).
+		// Margin(1).
 		//Height(maxHeight).
 		Render(keyboard)
 		//Render(finalContent)
 
-	styledKeyboard = ""
+	/*
+		DEBUG CODE - REMOVE
+	*/
+	// styledKeyboard = ""
+	/*
+		END DEBUG CODE
+	*/
 
 	// return styledKeyboard
 	ui := lipgloss.JoinVertical(lipgloss.Left, info, styledKeyboard)
 	return ui //m.centerContent(ui)
+}
+
+func (m Model) renderPrompt(maxHeight int) string {
+	// Style definitions
+	promptStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("62")).
+		Padding(1, 2).
+		Margin(1)
+
+	correctStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("46"))                                    // Green
+	incorrectStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("196"))                                 // Red
+	currentStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("226")).Background(lipgloss.Color("240")) // Yellow bg
+	futureStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))                                    // Gray
+
+	// Build prompt display
+	var promptDisplay strings.Builder
+	for i, char := range m.prompt {
+		if i < len(m.userInput) {
+			// Character has been typed
+			if i < len(m.userInput) && rune(m.userInput[i]) == char {
+				promptDisplay.WriteString(correctStyle.Render(string(char)))
+			} else {
+				promptDisplay.WriteString(incorrectStyle.Render(string(char)))
+			}
+		} else if i == m.currentChar {
+			// Current character to type
+			promptDisplay.WriteString(currentStyle.Render(string(char)))
+		} else {
+			// Future characters
+			promptDisplay.WriteString(futureStyle.Render(string(char)))
+		}
+	}
+
+	// Progress info
+	progress := fmt.Sprintf("Progress: %d/%d characters | Prompt %d/%d",
+		len(m.userInput), len(m.prompt), m.promptIndex+1, len(m.prompts))
+
+	instructions := "Tab: Next prompt | Ctrl+C/Q: Quit"
+
+	return promptStyle.Render(
+		fmt.Sprintf("Type: %s\n\n%s\n\n%s\n%s",
+			m.prompt,
+			promptDisplay.String(),
+			progress,
+			instructions))
+		//Height(maxHeight).
+
+}
+
+func (m Model) getKeyboardRows() map[int][]Key {
+	rows := make(map[int][]Key)
+	maxY := 0
+	for _, key := range m.keyboard.Keys {
+		y := key.Y
+		rows[y] = append(rows[y], key)
+		if y > maxY {
+			maxY = y
+		}
+	}
+	return rows
+}
+
+// Find the total u-width of the longest row
+func getKeyboardWidth(kbRows map[int][]Key) float64 {
+	maxWidth := 0.0
+	for row := range(kbRows) {
+		rowWidth := 0.0
+		for key := range(row) {
+			rowWidth += kbRows[row][key].Width
+		}
+		if rowWidth > maxWidth {
+			maxWidth = rowWidth
+		}
+	}
+	return maxWidth
 }
 
 func isSpecialKey(label string) bool {
