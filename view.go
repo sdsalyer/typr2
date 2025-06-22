@@ -277,11 +277,6 @@ func (m Model) renderCommandLine() string {
 }
 
 // Render the onscreen keyboard
-/*
-
-TODO: This renders the keyboard in a vertical orientation and the keys appear to be too big.
-It should fill the width of the terminal and be more compact.
-*/
 func (m Model) renderKeyboard(maxHeight int) string {
 	if len(m.keyboard.Keys) == 0 {
 		return "No keyboard layout loaded"
@@ -563,6 +558,7 @@ and then...
 	return ui //m.centerContent(ui)
 }
 
+// Render the onscreen prompt
 func (m Model) renderPrompt(maxHeight int) string {
 	// Style definitions
 	promptStyle := lipgloss.NewStyle().
@@ -611,6 +607,7 @@ func (m Model) renderPrompt(maxHeight int) string {
 
 }
 
+// Returns a map of keyboard rows based on the currently loaded keyboard
 func (m Model) getKeyboardRows() map[int][]Key {
 	rows := make(map[int][]Key)
 	maxY := 0
@@ -639,6 +636,7 @@ func getKeyboardWidth(kbRows map[int][]Key) float64 {
 	return maxWidth
 }
 
+// Determine whether given label is a "special" key
 func isSpecialKey(label string) bool {
 	// TODO: why is this checking specific keys loaded from JSON which likely won't exist?
 	specialKeys := []string{
