@@ -12,19 +12,7 @@ A re-write and re-imagining of the original [typr](https://sr.ht/~berts/typr/) p
 
 ## Project
 
-I looked at the top Go projects on Github and found that their project
-structures are all over the place. However, one of the most-starred Go projects
-is the project layout listed below.
+**Note: This is a work-in-progress for the purposes of teaching myself Golang. I welcome 
+any code reviews or pull requests for code improvements.**
 
-This project uses the format standard at
-[golang-standards/project-layout](https://github.com/golang-standards/project-layout)
-
-These tenets from Melkey might also be useful:
-
-1. Keep binaries and libraries separate.
-  - `internal/` for private libs
-  - `pkg/` for public libs
-2. Avoid nested packages (keep it flat).
-3. Keep package names descriptive.
-4. Put non-go files at the root of the project.
-5. Keep tests in the tests folder.
+You can read the [TODO.md](TODO.md) for current feature plans and status.
